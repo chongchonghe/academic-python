@@ -1,4 +1,4 @@
-# python_utilities
+# Academic Python
 
 Some python functions and modules that are often used in my research.
 
