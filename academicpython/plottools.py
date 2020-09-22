@@ -133,3 +133,10 @@ def text_top_center(ax, text, **kwargs):
     #             xytext=(hspace, 0), textcoords='offset points',
     #             va='center', **kwargs)
     return
+
+
+def set_y_decades(decades, ax=None):
+    if ax is None:
+        ax = plt.gca()
+    ymin = ax.get_ylim()[1] / 10**decades
+    ax.set_ylim(bottom=ymin)
