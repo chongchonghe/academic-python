@@ -110,7 +110,10 @@ def save_pdfpng(filename, filedir='.', fig=None, dpi=None, **kwargs):
 
     if not SAVING:
         return
+    is_png = 1
     if len(filename) > 4:
+        if filename[-4:] == ".pdf":
+            is_png = 0
         if filename[-4:] in ['.pdf', '.png']:
             filename = filename[:-4]
     pre = plt if fig is None else fig
@@ -118,7 +121,8 @@ def save_pdfpng(filename, filedir='.', fig=None, dpi=None, **kwargs):
     f2 = os.path.join(PLOT_DIR, filename+'.png')
     pre.savefig(f1, **kwargs)
     print(f1, 'saved.')
-    pre.savefig(f2, dpi=300 if dpi is None else dpi, **kwargs)
+    if is_png:
+        pre.savefig(f2, dpi=300 if dpi is None else dpi, **kwargs)
     print(f2, 'saved.')
 
 save = save_pdfpng
