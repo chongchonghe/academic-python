@@ -1,3 +1,17 @@
+"""json_encoder.py
+
+Defines a json encoder to make dumped json file look nicer. This Encoder push a list into a single line.
+
+Usage:
+>>> from academicpython.json_encoder import MyEncoder, NoIndent
+>>> dict['layer1']['layer2'] = NoIndent(list(something))
+>>> jd = json.dumps(dict, indent=2, cls=MyEncoder)
+>>> fout.write(jd)
+
+Source: https://stackoverflow.com/questions/13249415/how-to-implement-custom-indentation-when-pretty-printing-with-the-json-module
+
+"""
+
 from _ctypes import PyObj_FromPtr
 import json
 import re

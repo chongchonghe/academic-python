@@ -102,7 +102,7 @@ def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
     )
     return f, ax
 
-def save_pdfpng(filename, filedir='.', fig=None, dpi=None, **kwargs):
+def save_pdfpng(filename, filedir='.', fig=None, dpi=None, isprint=1, **kwargs):
     """
     Save the current figure to PDF and PNG in PLOT_DIR.
     PLOT_DIR and TAG are used
@@ -120,10 +120,12 @@ def save_pdfpng(filename, filedir='.', fig=None, dpi=None, **kwargs):
     f1 = os.path.join(PLOT_DIR, filename+'.pdf')
     f2 = os.path.join(PLOT_DIR, filename+'.png')
     pre.savefig(f1, **kwargs)
-    print(f1, 'saved.')
+    if isprint:
+        print(f1, 'saved.')
     if is_png:
         pre.savefig(f2, dpi=300 if dpi is None else dpi, **kwargs)
-    print(f2, 'saved.')
+        if isprint:
+            print(f2, 'saved.')
 
 save = save_pdfpng
 save_plot = save_pdfpng
