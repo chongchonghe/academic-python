@@ -15,6 +15,25 @@ from scipy import ndimage
 PLOT_DIR = '.'
 SAVING = True
 
+DASHES = [[], # solid
+          [3,3], # dash
+          [1,1], # dot
+          [1,1,3,1], # dot dash
+          # [9,3], # long dash
+          [6,2], # long dash
+          [3,1,1,1,1,1], # dash dot dot
+          [9,3,3,3], # long short dash
+          [1,1,9,1], # dot long dash
+          [9,3,3,3,3,3], # long short short dash
+          [9,1,1,1,1,1], # long dash dot dot
+          [3,3,3,3,1,3], # dash dash dot
+          [9,3,9,3,1,3], # long dash long dash dot
+          [9,3,9,3,3,3], # long dash long dash dash
+          [9,3,3,3,1,3], # long dash dash dot
+          [9,1,1,1,1,1,1,1], # long dash dot dot dot
+         ]
+
+
 def set_plotdir(path):
     """
     Set the default directory where plots are saved. At the same time,
@@ -137,23 +156,36 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
 
     if not SAVING:
         return
-    is_png = 1
+    if dpi is None:
+        dpi = 300
+    with_ext = False
     if len(filename) > 4:
-        if filename[-4:] == ".pdf":
-            is_png = 0
         if filename[-4:] in ['.pdf', '.png']:
-            filename = filename[:-4]
+            with_ext = True
+            ext = filename[-4:]
+            #filename = filename[:-4]
     pre = plt if fig is None else fig
+    if with_ext:
+        if ext == '.png':
+            fn = os.path.join(PLOT_DIR, filename)
+            pre.savefig(fn, dpi=dpi, **kwargs)
+            if isprint:
+                print(fn, 'saved.')
+            return
+        # PDF
+        fn = os.path.join(PLOT_DIR, filename)
+        pre.savefig(fn, **kwargs)
+        if isprint:
+            print(fn, 'saved.')
+        return
+    os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
     f1 = os.path.join(PLOT_DIR, filename+'.pdf')
     f2 = os.path.join(PLOT_DIR, 'pngs', filename+'.png')
     pre.savefig(f1, **kwargs)
+    pre.savefig(f2, dpi=dpi, **kwargs)
     if isprint:
         print(f1, 'saved.')
-    if is_png:
-        os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
-        pre.savefig(f2, dpi=300 if dpi is None else dpi, **kwargs)
-        if isprint:
-            print(f2, 'saved.')
+        print(f2, 'saved.')
 
 save = save_pdfpng
 save_plot = save_pdfpng
