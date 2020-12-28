@@ -117,6 +117,12 @@ def shared_ylabel(axes, text=None):
         # yl.set_verticalalignment('bottom')
         yl.set_horizontalalignment('center')
 
+def scaled_figure(rows=1, columns=1, **kwargs):
+    f, ax = plt.subplots(rows, columns, **kwargs)
+    w, h = f.get_size_inches()
+    f.set_size_inches(w * columns, h * rows)
+    return f, ax
+
 def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
                      rescale=1.0, top=False, right=False,
                      ret_size=False, figsize=None,
