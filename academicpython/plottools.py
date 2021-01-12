@@ -11,6 +11,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from scipy import ndimage
+import json
+import datetime
 
 PLOT_DIR = '.'
 SAVING = True
@@ -152,7 +154,7 @@ def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
     return f, ax
 
 #def save_pdfpng(filename, filedir='.', fig=None, dpi=None, isprint=1, **kwargs):
-def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
+def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs):
     """
     Save the current figure to PDF and PNG in PLOT_DIR.
     PLOT_DIR and TAG are used
@@ -193,6 +195,20 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
     if isprint:
         print(f1, 'saved.')
         print(f2, 'saved.')
+
+    # write plotting logs into info.json
+    fn_json = os.path.join(PLOT_DIR, "info.json")
+    if not os.path.isfile(fn_json):
+        data = {"About": "This is a log file for the figures in this folder"}
+    else:
+        with open(fn_json) as ff:
+            data = json.load(ff)
+
+    thisdic = {"data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+               "from": fromfile if fromfile is not None else "Unspecified"}
+    data[fn] = thisdic
+    with open(fn_json) as ff:
+        json.dump(ff, data, indent=2)
 
 save = save_pdfpng
 save_plot = save_pdfpng
