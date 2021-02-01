@@ -16,6 +16,7 @@ import datetime
 
 PLOT_DIR = '.'
 SAVING = True
+NAME = None
 
 DASHES = [[], # solid
           [3,3], # dash
@@ -33,8 +34,19 @@ DASHES = [[], # solid
           [9,3,9,3,3,3], # long dash long dash dash
           [9,3,3,3,1,3], # long dash dash dot
           [9,1,1,1,1,1,1,1], # long dash dot dot dot
-         ]
+         ]          # Author: Laurens Keek
 
+def init(file_):
+    global NAME
+    NAME = file_
+
+def backup(fi):
+    """ Rename fi: appending a date and time in ISO 8601 format. e.g.
+    '-bk20200101T120000' """
+    filename, file_extension = os.path.splitext(fi)
+    dt = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    fo = f"{filename}-bk{dt}{file_extension}"
+    os.rename(fi, fo)
 
 def set_plotdir(path):
     """
@@ -198,17 +210,22 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs
 
     # write plotting logs into info.json
     fn_json = os.path.join(PLOT_DIR, "info.json")
-    if not os.path.isfile(fn_json):
+    jsonexist = False
+    if os.path.isfile(fn_json):
+        if os.stat(fn_json).st_size > 0:
+            jsonexist = True
+            with open(fn_json, 'r') as ff:
+                data = json.load(ff)
+    if not jsonexist:
         data = {"About": "This is a log file for the figures in this folder"}
-    else:
-        with open(fn_json) as ff:
-            data = json.load(ff)
 
+    if fromfile is None:
+        fromfile = NAME
     thisdic = {"data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                "from": fromfile if fromfile is not None else "Unspecified"}
-    data[fn] = thisdic
-    with open(fn_json) as ff:
-        json.dump(ff, data, indent=2)
+    data[f1] = thisdic
+    with open(fn_json, 'w') as ff:
+        json.dump(data, ff, indent=2)
 
 save = save_pdfpng
 save_plot = save_pdfpng
