@@ -6,11 +6,14 @@ Author: Chong-Chong He
 """
 
 import os
+import __main__
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from scipy import ndimage
+import json
+import datetime
 
 PLOT_DIR = '.'
 SAVING = True
@@ -151,7 +154,8 @@ def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
     )
     return f, ax
 
-def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
+# def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
+def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs):
     """
     Save the current figure to PDF and PNG in PLOT_DIR.
     PLOT_DIR and TAG are used
@@ -169,7 +173,10 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
         if filename[-4:] in ['.pdf', '.png']:
             with_ext = True
             ext = filename[-4:]
-            #filename = filename[:-4]
+    if with_ext:
+        basename = filename[:-4]
+    else:
+        basename = filename
     pre = plt if fig is None else fig
     if with_ext:
         if ext == '.png':
@@ -177,21 +184,39 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
             pre.savefig(fn, dpi=dpi, **kwargs)
             if isprint:
                 print(fn, 'saved.')
-            return
-        # PDF
-        fn = os.path.join(PLOT_DIR, filename)
-        pre.savefig(fn, **kwargs)
+        else:
+            # PDF, no dpi
+            fn = os.path.join(PLOT_DIR, filename)
+            pre.savefig(fn, **kwargs)
+            if isprint:
+                print(fn, 'saved.')
+    else:
+        # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
+        os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
+        f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
+        f2 = os.path.join(PLOT_DIR, filename+'.png')
+        pre.savefig(f1, **kwargs)
+        pre.savefig(f2, dpi=dpi, **kwargs)
         if isprint:
-            print(fn, 'saved.')
-        return
-    os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
-    f1 = os.path.join(PLOT_DIR, filename+'.pdf')
-    f2 = os.path.join(PLOT_DIR, 'pngs', filename+'.png')
-    pre.savefig(f1, **kwargs)
-    pre.savefig(f2, dpi=dpi, **kwargs)
-    if isprint:
-        print(f1, 'saved.')
-        print(f2, 'saved.')
+            print(f1, 'saved.')
+            print(f2, 'saved.')
+
+    # write plotting logs into info.json
+    fn_json = os.path.join(PLOT_DIR, "info.json")
+    if not os.path.isfile(fn_json):
+        data = {"_About": ("This is a log file that tells what scripts produce "
+                           "the figures in this folder. TODO: enable relative "
+                           "path to the 'from' file.")}
+    else:
+        with open(fn_json, 'r') as ff:
+            data = json.load(ff)
+    thisdic = {"data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+               # "from": fromfile if fromfile is not None else "Unspecified"}
+               "figure path": PLOT_DIR,
+               "from": str(os.path.basename(__main__.__file__))}
+    data[basename] = thisdic
+    with open(fn_json, 'w') as ff:
+        json.dump(data, ff, indent=2, sort_keys=True)
 
 save = save_pdfpng
 save_plot = save_pdfpng

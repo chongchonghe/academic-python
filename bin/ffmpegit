@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+""" ffmpegit
+What does this file do?
+
+Attributes
+----------
+
+Example
+-------
+>>> ffmpegit -d images/directory
+>>> ffmpegit -l image-list.txt
+"""
+
+#-----------------------------------------------------------------------------
+#    Author: Chong-Chong He
+#    Data: 2021-01-07
+#-----------------------------------------------------------------------------
+
+from __future__ import division, print_function
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import argparse
+
+
+def main(args):
+
+    assert args.fmt in ['mov', 'gif']
+    assert not (args.d is None and args.list is None), \
+        "Either args.d or args.list needs to be non-None"
+    
+    if args.fmt == 'mov':
+        fps = int(args.f)
+        # cmd = (f"ffmpeg -r {fps} -f image2 -vcodec mjpeg -qscale 1 "
+        #        f"-i {args.d}/*.{args.ext} {args.fo}.avi")
+        if args.d is not None:
+            cmd = (f"ffmpeg -r {fps} -f image2 -pattern_type glob -i '{args.d}/*.{args.ext}' -vcodec mjpeg -qscale 1 {args.fo}.avi")
+        elif args.list is not None:
+            cmd = (f"ffmpeg -f concat -safe 0 -r {fps} -i {args.list} -vcodec mjpeg -qscale 1 {args.fo}.avi")
+        print("Running '", cmd, "'")
+        os.system(cmd)
+
+    if args.fmt == 'gif':
+        delay = int(1. / args.f * 100)
+        cmd = f"convert -delay {delay} -loop 0 {args.d}/*.{args.ext} {args.fo}.gif"
+        print("Running '", cmd, "'")
+        os.system(cmd)
+        return
+
+
+if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('fo')
+    parser.add_argument('-d', help="Directory of the images as input. All"
+                        " images with the given extension (default png) will "
+                        "be used in a sorted order.")
+    parser.add_argument('-list', help="A file listing the images to convert from")
+    parser.add_argument('-ext', default='png',
+                        help="Input image format. Default: png")
+    parser.add_argument('-f', default=3, type=float,
+                        help="Animation frequency/framerate")
+    parser.add_argument('-fmt', default='gif', help="Output format (gif, mov)")
+    _args = parser.parse_args()
+
+    main(_args)
