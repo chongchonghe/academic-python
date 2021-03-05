@@ -3,6 +3,15 @@
 Tools for plotting with matplotlib. Use along with scienceplot.
 Author: Chong-Chong He
 
+# About OVERWRITE
+
+By default, OVERWRITE is on. To turn it off, do
+dt.turnoff_overwrite(). Then, you can use command line arguments to
+turn it on in case you want to enable overwriting ocasionally. e.g.
+>>> if len(sys.argv) >= 2:
+>>>     if "-f" in sys.argv[1:]:
+>>>         pt.turnon_overwrite()
+
 """
 
 import os
@@ -14,28 +23,28 @@ import matplotlib.ticker as ticker
 from scipy import ndimage
 import json
 import datetime
+import logging
 
 PLOT_DIR = '.'
 SAVING = True
+OVERWRITE = True
+BACKUP = True
+FROMFILE = "Unspecified"
+SUPPRESS_PRINT = 0
 
-DASHES = [[], # solid
-          [3,3], # dash
-          [1,1], # dot
-          [1,1,3,1], # dot dash
-          # [9,3], # long dash
-          [6,2], # long dash
-          [3,1,1,1,1,1], # dash dot dot
-          [9,3,3,3], # long short dash
-          [1,1,9,1], # dot long dash
-          [9,3,3,3,3,3], # long short short dash
-          [9,1,1,1,1,1], # long dash dot dot
-          [3,3,3,3,1,3], # dash dash dot
-          [9,3,9,3,1,3], # long dash long dash dot
-          [9,3,9,3,3,3], # long dash long dash dash
-          [9,3,3,3,1,3], # long dash dash dot
-          [9,1,1,1,1,1,1,1], # long dash dot dot dot
-         ]
+def init(file_):
+    global FROMFILE
+    FROMFILE = file_
 
+set_fromfile = init
+
+def backup(fi):
+    """ Rename fi: appending a date and time in ISO 8601 format. e.g.
+    '-bk20200101T120000' """
+    filename, file_extension = os.path.splitext(fi)
+    dt = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    fo = f"{filename}-bk{dt}{file_extension}"
+    os.rename(fi, fo)
 
 def set_plotdir(path):
     """
@@ -154,8 +163,35 @@ def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
     )
     return f, ax
 
+def turnoff_overwrite():
+    global OVERWRITE
+    OVERWRITE = False
+
+def turnon_overwrite():
+    global OVERWRITE
+    OVERWRITE = True
+
+def turnoff_backup():
+    global BACKUP
+    BACKUP = False
+
+def turnoff_print():
+    global ISPRINT
+    ISPRINT = False
+
 # def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
-def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs):
+def get_full_filename(filename):
+    if len(filename) <= 4:
+        fn = os.path.join(PLOT_DIR, filename+'.png')
+    else:
+        if filename[-4:] not in ['.pdf', '.png']:
+            fn = os.path.join(PLOT_DIR, filename+'.png')
+        else:
+            fn = os.path.join(PLOT_DIR, filename)
+    return fn
+
+def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
+                is_overwrite=None, **kwargs):
     """
     Save the current figure to PDF and PNG in PLOT_DIR.
     PLOT_DIR and TAG are used
@@ -165,9 +201,11 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs
     """
 
     if not SAVING:
+        print("SAVING is false. Skiping...")
         return
     if dpi is None:
         dpi = 300
+    isprint = isprint and not SUPPRESS_PRINT
     with_ext = False
     if len(filename) > 4:
         if filename[-4:] in ['.pdf', '.png']:
@@ -178,49 +216,66 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None, **kwargs
     else:
         basename = filename
     pre = plt if fig is None else fig
+
+    # write plotting logs into info.json
+    fn_json = os.path.join(PLOT_DIR, "info.json")
+    jsonexist = False
+    if os.path.isfile(fn_json):
+        if os.stat(fn_json).st_size > 0:
+            jsonexist = True
+            with open(fn_json, 'r') as ff:
+                data = json.load(ff)
     if with_ext:
-        if ext == '.png':
-            fn = os.path.join(PLOT_DIR, filename)
-            pre.savefig(fn, dpi=dpi, **kwargs)
-            if isprint:
-                print(fn, 'saved.')
-        else:
-            # PDF, no dpi
-            fn = os.path.join(PLOT_DIR, filename)
-            pre.savefig(fn, **kwargs)
-            if isprint:
-                print(fn, 'saved.')
+        f2 = os.path.join(PLOT_DIR, filename)
+        if ext == '.png':       # set dpi
+            pre.savefig(f2, dpi=dpi, **kwargs)
+        else:                   # PDF, no dpi
+            pre.savefig(f2, **kwargs)
+        if isprint:
+            print(f2, 'saved.')
     else:
         # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
         os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
         f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
-        f2 = os.path.join(PLOT_DIR, filename+'.png')
         pre.savefig(f1, **kwargs)
+        f2 = os.path.join(PLOT_DIR, filename+'.png')
+        backup_dir = "history_versions"
+        if not OVERWRITE and os.path.exists(f2):
+            return
+        if BACKUP and os.path.exists(f2): # make a backup
+            os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
+            # read create time from info.json
+            creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+            if jsonexist:
+                if basename in data.keys():
+                    creation = data[basename]["creation time"]
+                    creation = creation.replace(' ', '')
+            os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.png")
         pre.savefig(f2, dpi=dpi, **kwargs)
         if isprint:
             print(f1, 'saved.')
             print(f2, 'saved.')
 
-    # write plotting logs into info.json
-    fn_json = os.path.join(PLOT_DIR, "info.json")
-    if not os.path.isfile(fn_json):
+    if not jsonexist:
         data = {"_About": ("This is a log file that tells what scripts produce "
                            "the figures in this folder. TODO: enable relative "
                            "path to the 'from' file.")}
-    else:
-        with open(fn_json, 'r') as ff:
-            data = json.load(ff)
-    thisdic = {"data": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    if fromfile is None:
+        fromfile = FROMFILE
+    thisdic = {"creation time": datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S"),
                # "from": fromfile if fromfile is not None else "Unspecified"}
                "figure path": PLOT_DIR,
-               "from": str(os.path.basename(__main__.__file__))}
+               "from": fromfile}
+    # data[f1] = thisdic
     data[basename] = thisdic
     with open(fn_json, 'w') as ff:
         json.dump(data, ff, indent=2, sort_keys=True)
+    if SUPPRESS_PRINT == 2:
+        print(f2)
+    return f2
 
 save = save_pdfpng
 save_plot = save_pdfpng
-
 def text_top_center(ax, text, **kwargs):
     """ write text on the top center of the figure """
 
@@ -230,7 +285,6 @@ def text_top_center(ax, text, **kwargs):
     #             xytext=(hspace, 0), textcoords='offset points',
     #             va='center', **kwargs)
     return
-
 
 def set_y_decades(decades, ax=None, is_ret_ymax=0):
     if ax is None:
@@ -380,3 +434,48 @@ def my_legend(axis = None):
         axis.text(x, y, axis.lines[l].get_label(),
                   horizontalalignment='center',
                   verticalalignment='center')
+
+DASHES = [[], # solid
+          [3,3], # dash
+          [1,1], # dot
+          [1,1,3,1], # dot dash
+          # [9,3], # long dash
+          [6,2], # long dash
+          [3,1,1,1,1,1], # dash dot dot
+          [9,3,3,3], # long short dash
+          [1,1,9,1], # dot long dash
+          [9,3,3,3,3,3], # long short short dash
+          [9,1,1,1,1,1], # long dash dot dot
+          [3,3,3,3,1,3], # dash dash dot
+          [9,3,9,3,1,3], # long dash long dash dot
+          [9,3,9,3,3,3], # long dash long dash dash
+          [9,3,3,3,1,3], # long dash dash dot
+          [9,1,1,1,1,1,1,1], # long dash dot dot dot
+         ]          # Author: Laurens Keek
+
+class ToSave:
+    """
+    Usage:
+
+    s = Save("filename")
+    if s.plot:
+        f = plt.figure()
+        plt.plot(...)
+        ...
+        s.save()
+    """
+
+    def __init__(self, fn, is_always_save=False):
+        self.fn = fn
+        full_fn = get_full_filename(fn)
+        this_overwrite = OVERWRITE if not is_always_save else True
+        self.plot = not os.path.exists(full_fn)
+        if this_overwrite:
+            self.plot = True
+
+    def save(self, fn=None, **kwargs):
+        if fn is None:
+            save_pdfpng(self.fn, **kwargs)
+        else:
+            save_pdfpng(fn, **kwargs)
+        return
