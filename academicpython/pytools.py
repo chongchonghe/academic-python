@@ -2,6 +2,7 @@
 General purpose tools
 """
 import sys
+import subprocess
 
 # def to_latex(f, n=2):
 #     assert type(n) == int
@@ -12,6 +13,14 @@ import sys
 #         return r"{0} \times 10^{{{1}}}".format(base, int(exponent))
 #     else:
 #         return float_str
+
+def betterRun(cmd, prt=True, check=True):
+
+    process = subprocess.run(cmd, shell=1, check=check, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE,  universal_newlines=True)
+    if prt:
+        print(process.stdout)
+    return process.stdout, process.stderr
 
 def to_latex(f, n=2):
     assert type(n) == int
@@ -43,7 +52,7 @@ def getarg(arg, value=None):
         >>> ./main.py or ./main.py -o PNG # fmpt = "PNG"
     """
 
-    if len(sys.argv) <= 2:
+    if len(sys.argv) <= 1:
         return False
     if arg in sys.argv[1:]:
         if value is None:
