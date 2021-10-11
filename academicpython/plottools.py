@@ -17,6 +17,7 @@ turn it on in case you want to enable overwriting ocasionally. e.g.
 import os
 import __main__
 import numpy as np
+from math import atan, pi
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -24,13 +25,21 @@ from scipy import ndimage
 import json
 import datetime
 import logging
+from scipy.interpolate import interp1d
 
 PLOT_DIR = '.'
 SAVING = True
 OVERWRITE = True
 BACKUP = True
 FROMFILE = "Unspecified"
-SUPPRESS_PRINT = 0
+SUPPRESS_PRINT = 1 # 0: print a lot; 1: print none; 2: print filename
+FMT = 'pdfpng'
+# FMT:
+# 'pdf': only save pdf
+# 'png': save png; save pdf in pdfs/
+# 'pdfpng': (not implemented yet) save pdf; save png in pngs/
+
+plt.style.use(['science', 'no-latex'])
 
 def init(file_):
     global FROMFILE
@@ -234,27 +243,56 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
         if isprint:
             print(f2, 'saved.')
     else:
-        # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
-        os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
-        f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
-        pre.savefig(f1, **kwargs)
-        f2 = os.path.join(PLOT_DIR, filename+'.png')
-        backup_dir = "history_versions"
-        if not OVERWRITE and os.path.exists(f2):
-            return
-        if BACKUP and os.path.exists(f2): # make a backup
-            os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
-            # read create time from info.json
-            creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-            if jsonexist:
-                if basename in data.keys():
-                    creation = data[basename]["creation time"]
-                    creation = creation.replace(' ', '')
-            os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.png")
-        pre.savefig(f2, dpi=dpi, **kwargs)
-        if isprint:
-            print(f1, 'saved.')
-            print(f2, 'saved.')
+        if FMT == 'png':
+            # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
+            os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
+            f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
+            pre.savefig(f1, **kwargs)
+            f2 = os.path.join(PLOT_DIR, filename+'.png')
+            if not OVERWRITE and os.path.exists(f2):
+                return
+            backup_dir = "history_versions"
+            if BACKUP and os.path.exists(f2): # make a backup
+                os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
+                # read create time from info.json
+                creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+                if jsonexist:
+                    if basename in data.keys():
+                        creation = data[basename]["creation time"]
+                        creation = creation.replace(' ', '')
+                os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.png")
+            pre.savefig(f2, dpi=dpi, **kwargs)
+            if isprint:
+                print(f1, 'saved.')
+                print(f2, 'saved.')
+        elif FMT == 'pdf':
+            f2 = os.path.join(PLOT_DIR, filename+'.pdf')
+            if not OVERWRITE and os.path.exists(f2):
+                return
+            backup_dir = "history_versions"
+            if BACKUP and os.path.exists(f2): # make a backup
+                os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
+                # read create time from info.json
+                creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+                if jsonexist:
+                    if basename in data.keys():
+                        creation = data[basename]["creation time"]
+                        creation = creation.replace(' ', '')
+                os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.pdf")
+            pre.savefig(f2, **kwargs)
+            if isprint:
+                print(f2, 'saved.')
+        elif FMT == 'pdfpng':
+            os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
+            f1 = os.path.join(PLOT_DIR, filename+'.pdf')
+            if not OVERWRITE and os.path.exists(f1):
+                return
+            pre.savefig(f1, **kwargs)
+            f2 = os.path.join(PLOT_DIR, 'pngs', filename+'.png')
+            pre.savefig(f2, dpi=dpi, **kwargs)
+            if isprint:
+                print(f1, 'saved.')
+                print(f2, 'saved.')
 
     if not jsonexist:
         data = {"_About": ("This is a log file that tells what scripts produce "
@@ -276,6 +314,7 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
 
 save = save_pdfpng
 save_plot = save_pdfpng
+
 def text_top_center(ax, text, **kwargs):
     """ write text on the top center of the figure """
 
@@ -457,7 +496,7 @@ class ToSave:
     """
     Usage:
 
-    s = Save("filename")
+    s = ToSave("filename")
     if s.plot:
         f = plt.figure()
         plt.plot(...)
@@ -479,3 +518,115 @@ class ToSave:
         else:
             save_pdfpng(fn, **kwargs)
         return
+
+def to_latex(f, n=2):
+    assert type(n) == int
+    fmt = "{{:.{}g}}".format(n)
+    float_str = fmt.format(f)
+    if "e" in float_str:
+        base, exponent = float_str.split("e")
+        if base == '1':
+            return r"10^{{{}}}".format(int(exponent))
+        else:
+            return r"{0} \times 10^{{{1}}}".format(base, int(exponent))
+    else:
+        return float_str
+
+def changing_color_curve(ax, x, y, xlim, colors, lw='regular'):
+    """
+    Args:
+        x (list):
+        y (list):
+        xlim (list with length 2): set the limit of x with respect to 0
+            and 1 of the color scael
+        colors (function): returns the color given a value from 0 to 1
+
+    """
+    interp = interp1d(x, y, kind='linear')
+    x_new = np.linspace(np.min(x), np.max(x), 1000)
+    y_new = interp(x_new)
+    lw = {'regular': 2, 'thin': 1, 'thick': 4}[lw]
+    values = (x_new - xlim[0]) / (xlim[1] - xlim[0])
+    ax.scatter(x_new, y_new, c=colors(values), edgecolor='none', s=lw)
+
+def mylegend(ax=None, loc=0.3, kind='top', align=True, nslope=1,
+             margin_right=0.05, **kwargs):
+    """
+    Args:
+        loc (float or tuple): location (x axis) of the labels. If tuple,
+            ranging from loc[0] to loc[1].
+
+    """
+    if isinstance(loc, float):
+        x_start = loc
+        x_end = loc
+    else:
+        x_start = loc[0]
+        x_end = loc[1]
+    if kind == 'top':
+        trans = ax.get_yaxis_transform()
+        lines = ax.lines
+        #if pos is None:
+            #pos = 1 - 0.618
+        poss = [x_start + i / (len(lines) - 1) * (x_end - x_start) for i in range(len(lines))]
+        for pos, line in zip(poss, lines):
+            xy = line.get_xydata()
+            xdata = xy[:, 0]
+            ydata = xy[:, 1]
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            datax = xmin + pos * (xmax - xmin)
+            assert datax > -1e10
+            pick = np.argmax(xy[:, 0] >= datax)
+            ypick = xy[pick, 1]
+            if ypick > ymax or ypick < ymin:
+                continue
+            assert not np.isnan(ypick), f'datax = {datax}, pos={pos}, lim={xmin}, {xmax}, '
+
+            # align text
+            if align:
+                #Compute the slope
+                half = nslope // 2
+                dx = xdata[pick + nslope - half] - xdata[pick - half]
+                dy = ydata[pick + nslope - half] - ydata[pick - half]
+                if dx == 0.0:
+                    ang = 0.0
+                else:
+                    ang = atan(dy/dx) * 180 / pi
+
+                # Transform to screen co-ordinates
+                pt = np.array([xdata[pick], ydata[pick]]).reshape((1,2))
+                trans_angle = ax.transData.transform_angles(
+                    np.array((ang,)), pt)[0]
+
+            else:
+                trans_angle = 0
+
+            ax.annotate(line.get_label(), xy=(pos, ypick), xycoords=trans,
+                        xytext=(0, 2), textcoords='offset points',
+                        va='bottom', ha='center',
+                        color=line.get_color(),
+                        rotation=trans_angle,
+                        **kwargs,
+                       )
+            # ax.text(pos, ypick, line.get_label(),
+            #         transform=trans,
+            #         va='bottom', ha='center',
+            #         color=line.get_color(),
+            #         rotation=trans_angle,
+            #         **kwargs,
+            # )
+    elif kind == 'last':
+        lines = ax.lines
+        for line in lines:
+            xy = line.get_xydata()
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            if xy[-1, 1] > ymax or xy[-1, 1] < ymin:
+                continue
+            ax.text(xy[-1, 0], xy[-1, 1], ' ' + line.get_label(), va='center',
+                    color=line.get_color(),
+                    **kwargs,)
+        # increase xlim by 10%
+        ax.set_xlim(xmin, xmax + margin_right * (xmax - xmin))
+
