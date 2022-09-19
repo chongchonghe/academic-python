@@ -31,10 +31,11 @@ from scipy.interpolate import interp1d
 PLOT_DIR = '.'
 SAVING = True
 OVERWRITE = True
-BACKUP = True
+# BACKUP = False
+BACKUP = 1
 FROMFILE = "Unspecified"
 SUPPRESS_PRINT = 1 # 0: print a lot; 1: print none; 2: print filename
-FMT = 'pdfpng'
+FMT = 'png'
 # FMT:
 # 'pdf': only save pdf
 # 'png': save png; save pdf in pdfs/
@@ -56,6 +57,17 @@ def backup(fi):
     fo = f"{filename}-bk{dt}{file_extension}"
     os.rename(fi, fo)
 
+
+def backupone(fi):
+    """ Rename fi: appending a date and time in ISO 8601 format. e.g.
+    '-bk20200101T120000' """
+    filename, file_extension = os.path.splitext(fi)
+    dt = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    fo = f"{filename}-bk{dt}{file_extension}"
+    os.rename(fi, fo)
+
+
+
 def set_plotdir(path):
     """
     Set the default directory where plots are saved. At the same time,
@@ -76,7 +88,7 @@ def set_save(saving=True):
     global SAVING
     SAVING = saving
 
-def clean_sharex(axes=None, hs=0.02):
+def clean_sharex(axes=None, hs=None):
     """
     For figure with multiple axes that share the x-axis, only
     keep the tick labels for the lower one, and remove the vertical
@@ -84,18 +96,19 @@ def clean_sharex(axes=None, hs=0.02):
     """
     if axes is None:
         axes = plt.gcf().axes
+    hs = 0.02 if hs is None else hs
     plt.subplots_adjust(hspace=hs)
-    if axes.ndim == 1:
+    if not hasattr(axes[0], "__iter__"):
         for ax in axes[:-1]:
             plt.setp(ax.get_xticklabels(), visible=False)
             ax.set_xlabel('')
-    elif axes.ndim == 2:
+    else:
         for axrow in axes[:-1]:
             for ax in axrow:
                 plt.setp(ax.get_xticklabels(), visible=False)
                 ax.set_xlabel('')
 
-def clean_sharey(axes=None, keep_tick_label=False, ws=0.02):
+def clean_sharey(axes=None, keep_tick_label=False, adjust=False, ws=0.02):
     """
     For figure with multiple axes that share the y-axis, only
     keep the tick labels for the left one, and remove the horizontal
@@ -103,19 +116,49 @@ def clean_sharey(axes=None, keep_tick_label=False, ws=0.02):
     """
     if axes is None:
         axes = plt.gcf().axes
-    plt.subplots_adjust(wspace=ws)
-    if np.ndim(axes) == 1:
+    if adjust:
+        plt.subplots_adjust(wspace=ws)
+    if not hasattr(axes[0], "__iter__"):
         for ax in axes[1:]:
             if not keep_tick_label:
                 plt.setp(ax.get_yticklabels(), visible=False)
             ax.set_ylabel('')
-    # elif axes.ndim == 2:
-    elif np.ndim(axes) == 2:
+    else:
         for axcol in axes:
             for ax in axcol[1:]:
                 if not keep_tick_label:
                     plt.setp(ax.get_yticklabels(), visible=False)
                 ax.set_ylabel('')
+
+def clean_sharexy(axes=None, adjust=False, hs=0.02, ws=0.02, keep_tick_label=False):
+    clean_sharex(axes, adjust, hs)
+    clean_sharey(axes, keep_tick_label=keep_tick_label, adjust=adjust, ws=ws)
+
+def clear_overlapped_ticks(axs, axis='xy', num=1):
+    ny = len(axs)
+    nx = len(axs[0])
+    for y_i in range(0, ny):
+        for x_i in range(0, nx):
+            ax = axs[y_i][x_i]
+            if 'y' in axis:
+                if x_i == 0:
+                    if y_i < ny - 1:
+                        print("here's the current ylabels:", ax.get_yticklabels())
+                        plt.setp(ax.get_yticklabels()[:num], visible=False)
+                # else:
+                #     ax.yaxis.set_ticklabels([])
+                #     ax.set_ylabel('')
+            # If bottom row:    Remove all overlapping x-ticks
+            if 'x' in axis:
+                if y_i == ny - 1:
+                    # If bottom but not right-most: Remove right x-tick
+                    if x_i < nx - 1:
+                        print("Teh current xlabels:",
+                              [i for i in ax.get_xticklabels()])
+                        plt.setp(ax.get_xticklabels()[-num:], visible=False)
+                # else:
+                #     ax.xaxis.set_ticklabels([])
+                #     ax.set_xlabel('')
 
 def shared_ylabel(axes, text=None):
     """
@@ -139,10 +182,19 @@ def shared_ylabel(axes, text=None):
         # yl.set_verticalalignment('bottom')
         yl.set_horizontalalignment('center')
 
-def scaled_figure(rows=1, columns=1, **kwargs):
+def scaled_figure(rows=1, columns=1, shrink=None, **kwargs):
     f, ax = plt.subplots(rows, columns, **kwargs)
     w, h = f.get_size_inches()
-    f.set_size_inches(w * columns, h * rows)
+    xs = 1
+    ys = 1
+    if shrink is not None:
+        if isinstance(shrink, dict):
+            xs = shrink['x'] if 'x' in shrink.items() else 1
+            ys = shrink['y'] if 'y' in shrink.items() else 1
+        elif isinstance(shrink, float):
+            xs = shrink
+            ys = shrink
+    f.set_size_inches(w * columns * xs, h * rows * ys)
     return f, ax
 
 def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
@@ -172,7 +224,6 @@ def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
                     hspace=0 if mergex else (b_inch + t_inch) / h_inch,
     )
     return f, ax
-
 
 def sized_figure_sci(rows=1, columns=1, mergex=True, mergey=True,
                  rescale=1.0, top=False, right=False,
@@ -233,7 +284,8 @@ def get_full_filename(filename):
     return fn
 
 def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
-                is_overwrite=None, **kwargs):
+                is_overwrite=None, kwargs={}):
+                # is_overwrite=None, **kwargs):
     """
     Save the current figure to PDF and PNG in PLOT_DIR.
     PLOT_DIR and TAG are used
@@ -280,20 +332,24 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
             os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
             f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
-            pre.savefig(f1, **kwargs)
             f2 = os.path.join(PLOT_DIR, filename+'.png')
             if not OVERWRITE and os.path.exists(f2):
                 return
-            backup_dir = "history_versions"
             if BACKUP and os.path.exists(f2): # make a backup
+                backup_dir = "history_versions"
                 os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
                 # read create time from info.json
-                creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-                if jsonexist:
-                    if basename in data.keys():
-                        creation = data[basename]["creation time"]
-                        creation = creation.replace(' ', '')
-                os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.png")
+                if isinstance(BACKUP, str): # BACKUP == 'all'
+                    creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+                    if jsonexist:
+                        if basename in data.keys():
+                            creation = data[basename]["creation time"]
+                            creation = creation.replace(' ', '')
+                    os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.{creation}.png")
+                elif BACKUP == 1:
+                    os.rename(f1, f"{PLOT_DIR}/{backup_dir}/{filename}.pdf")
+                    os.rename(f2, f"{PLOT_DIR}/{backup_dir}/{filename}.png")
+            pre.savefig(f1, **kwargs)
             pre.savefig(f2, dpi=dpi, **kwargs)
             if isprint:
                 print(f1, 'saved.')
@@ -325,7 +381,6 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             pre.savefig(f2, dpi=dpi, **kwargs)
             if isprint:
                 print(f1, 'saved.')
-                print(f2, 'saved.')
 
     if not jsonexist:
         data = {"_About": ("This is a log file that tells what scripts produce "
@@ -348,15 +403,31 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
 save = save_pdfpng
 save_plot = save_pdfpng
 
-def text_top_center(ax, text, **kwargs):
-    """ write text on the top center of the figure """
+def text_top(ax, text, loc='top', **kwargs):
+    """ write text on the top center of the figure
 
-    ax.text(0.5, 0.95, text, va='top', ha='center',
-            transform=ax.transAxes, **kwargs)
+    Args:
+        ax (plt.ax): plt axis
+        text (str): string to annotate
+        loc (str): location of the text (default top).
+            One of following: top, top_left, top_right
+    """
+
+    if loc in ['top', 'top_center', 'top center']:
+        ax.text(0.5, 0.95, text, va='top', ha='center',
+                transform=ax.transAxes, **kwargs)
+    elif loc in ['top_left', 'top left']:
+        ax.text(0.05, 0.95, text, va='top', ha='left',
+                transform=ax.transAxes, **kwargs)
+    elif loc in ['top_right', 'top right']:
+        ax.text(0.95, 0.95, text, va='top', ha='right',
+                transform=ax.transAxes, **kwargs)
     # ax.annotate(text, xy=(x, y), xycoords='data',
     #             xytext=(hspace, 0), textcoords='offset points',
     #             va='center', **kwargs)
     return
+
+text_top_center = text_top
 
 def set_y_decades(decades, ax=None, is_ret_ymax=0):
     if ax is None:
@@ -410,11 +481,13 @@ def setMyLogFormat(ax, axis='y'):
     if axis in ['y', 'both']:
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(myLogFormat))
 
+my_log_format = setMyLogFormat
+
 def plot_ind_cbar(ax=None, cmap='viridis', lims=[0, 1], label='',
-                  is_use_plotutils=False):
+                  orientation='horizontal', is_use_plotutils=False):
     """ Plot a individual colorbar, for demonstration of the color scale """
 
-    if_new = False
+    is_new = False
     if ax is None or ax == 'new':
         is_new = True
         if is_use_plotutils:
@@ -424,10 +497,12 @@ def plot_ind_cbar(ax=None, cmap='viridis', lims=[0, 1], label='',
         else:
             f = plt.figure(figsize=[5, 1])
         ax = f.add_axes([.1, .5, .8, .4])
+    else:
+        f = ax.get_figure()
     ax0 = f.add_axes([.5, .5, .1, .1])
     im = ax0.imshow([lims], cmap=cmap)
     ax0.set_visible(0)
-    cb = plt.colorbar(im, cax=ax, orientation='horizontal')
+    cb = plt.colorbar(im, cax=ax, orientation=orientation)
     cb.set_label(label)
     if is_new:
         return f
@@ -811,3 +886,74 @@ class CurvedText(matplotlib.text.Text):
 
             #updating rel_pos to right edge of character
             rel_pos += w-used
+
+def shift_axis(ax, func, axis='x', formatter=None):
+    if axis == 'x':
+        locs = ax.get_xticks()
+        labels = ax.get_xticklabels()
+    elif axis == 'y':
+        locs = ax.get_yticks()
+        labels = ax.get_yticklabels()
+    if formatter is None:
+        formatter = "{}"
+    labels_new = [formatter.format(func(float(i))) for i in locs]
+    ax.set_xticklabels(labels_new)
+    print(f"setting {labels} to {labels_new} at {locs}")
+    return
+
+def horizontal_grids(nrows, ncols):
+    f, axs = plt.subplots(nrows, ncols, sharex='all', sharey='all',
+                          gridspec_kw=dict(wspace=0, hspace=0))
+    return f, axs
+
+
+def add_scalebar(ax, length, label, h=0.014, left=0.03, right=None,
+                 color='w', gap=2, **kwargs):
+    """ Add a scalebar to a figure
+    Author: ChongChong He
+
+    Parameters
+    ----------
+    ax: matplotlib axes
+        The axes passed to add_scalebar
+    length: double
+        The length of the scalebar in code units
+    label: string
+        The scalebar label
+    h: double
+        The height of the scalebar relative to figure height
+    color: string
+        color
+    **kwargs: dict
+        kwargs passed to ax.text
+
+    Examples
+    --------
+    >>> im = plt.imread("/Users/chongchonghe/Pictures/bj.jpg")[:800, :800, :]
+    >>> plt.imshow(im)
+    >>> ax = plt.gca()
+    >>> add_scalebar(ax, 200, '3 pc')
+    >>> plt.show()
+
+    """
+    from matplotlib.patches import Rectangle
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    if right is None:
+        left_pos = xlim[0] + left * (xlim[1] - xlim[0])
+    else:
+        left_pos = xlim[0] + right * (xlim[1] - xlim[0]) - length
+    bottom = 0.03
+    bottom_pos = ylim[0] + bottom * (ylim[1] - ylim[0])
+    rect = Rectangle((left_pos, bottom_pos), length, h*(ylim[1] - ylim[0]),
+                     facecolor=color, edgecolor=None)
+
+    ax.add_patch(rect)
+    ax.text(
+        left_pos + 0.5*length,
+        ylim[0] + (h + bottom + gap) * (ylim[1] - ylim[0]),
+        label,
+        ha='center', va='bottom',
+        color=color,
+        **kwargs,
+    )

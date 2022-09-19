@@ -4,6 +4,7 @@ General purpose tools
 import sys, os
 import subprocess
 import logging
+from time import time
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -94,3 +95,22 @@ def archiveRun():
         2. If intermediate date does not exist, create that data tha use that data
     """
     return
+
+class timeit():
+
+    def __init__(self, ):
+        self.t1 = time()
+
+    def a(self):
+        T1 = time()
+        self.t1 = time()
+
+    def b(self):
+        dt = time() - self.t1
+        print(f"\nTime elapsed: {dt:.1f} seconds\n")
+
+    def start(self):
+        self.a()
+
+    def end(self):
+        self.b()
