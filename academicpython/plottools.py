@@ -29,19 +29,40 @@ import logging
 from scipy.interpolate import interp1d
 
 PLOT_DIR = '.'
+THELOG = ""
 SAVING = True
 OVERWRITE = True
 # BACKUP = False
 BACKUP = 1
 FROMFILE = "Unspecified"
-SUPPRESS_PRINT = 1 # 0: print a lot; 1: print none; 2: print filename
-FMT = 'png'
+SUPPRESS_PRINT = 1 # 0: print a lot; 1: print filename; 2: print none
+# FMT = 'png'
+FMT = 'pdf'
 # FMT:
 # 'pdf': only save pdf
 # 'png': save png; save pdf in pdfs/
 # 'pdfpng': (not implemented yet) save pdf; save png in pngs/
 
 plt.style.use(['science', 'no-latex'])
+
+# usage: plot(x, y, dashes=DASHES[0])
+DASHES = [[], # solid
+          [3,3], # dash
+          [1,1], # dot
+          [1,1,3,1], # dot dash
+          # [9,3], # long dash
+          [6,2], # long dash
+          [3,1,1,1,1,1], # dash dot dot
+          [9,3,3,3], # long short dash
+          [1,1,9,1], # dot long dash
+          [9,3,3,3,3,3], # long short short dash
+          [9,1,1,1,1,1], # long dash dot dot
+          [3,3,3,3,1,3], # dash dash dot
+          [9,3,9,3,1,3], # long dash long dash dot
+          [9,3,9,3,3,3], # long dash long dash dash
+          [9,3,3,3,1,3], # long dash dash dot
+          [9,1,1,1,1,1,1,1], # long dash dot dot dot
+          ]          # Author: Laurens Keek
 
 def init(file_):
     global FROMFILE
@@ -131,7 +152,8 @@ def clean_sharey(axes=None, keep_tick_label=False, adjust=False, ws=0.02):
                 ax.set_ylabel('')
 
 def clean_sharexy(axes=None, adjust=False, hs=0.02, ws=0.02, keep_tick_label=False):
-    clean_sharex(axes, adjust, hs)
+    # clean_sharex(axes, adjust, hs)
+    clean_sharex(axes, hs)
     clean_sharey(axes, keep_tick_label=keep_tick_label, adjust=adjust, ws=ws)
 
 def clear_overlapped_ticks(axs, axis='xy', num=1):
@@ -182,11 +204,15 @@ def shared_ylabel(axes, text=None):
         # yl.set_verticalalignment('bottom')
         yl.set_horizontalalignment('center')
 
-def scaled_figure(rows=1, columns=1, shrink=None, **kwargs):
+def scaled_figure(rows=1, columns=1, shrinkx=None, shrinky=None, shrink=None, **kwargs):
     f, ax = plt.subplots(rows, columns, **kwargs)
     w, h = f.get_size_inches()
     xs = 1
     ys = 1
+    if shrinkx is not None:
+        xs = shrinkx
+    if shrinky is not None:
+        ys = shrinky
     if shrink is not None:
         if isinstance(shrink, dict):
             xs = shrink['x'] if 'x' in shrink.items() else 1
@@ -273,33 +299,45 @@ def turnoff_print():
     ISPRINT = False
 
 # def save_pdfpng(filename, fig=None, dpi=None, isprint=1, **kwargs):
-def get_full_filename(filename):
+def get_full_filename(filename, fmt=None):
+    thefmt = fmt if fmt is not None else FMT
     if len(filename) <= 4:
         fn = os.path.join(PLOT_DIR, filename+'.png')
     else:
-        if filename[-4:] not in ['.pdf', '.png']:
-            fn = os.path.join(PLOT_DIR, filename+'.png')
-        else:
+        if filename[-4:] in ['.pdf', '.png']:
             fn = os.path.join(PLOT_DIR, filename)
+        else:
+            fn = os.path.join(PLOT_DIR, filename+'.'+thefmt)
     return fn
 
-def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
-                is_overwrite=None, kwargs={}):
-                # is_overwrite=None, **kwargs):
-    """
-    Save the current figure to PDF and PNG in PLOT_DIR.
-    PLOT_DIR and TAG are used
+def save_pdfpng(filename, fig=None, dpi=300, isprint=True, fromfile=None,
+                is_overwrite=None, fmt=None, kwargs={}):
+    """ Save the current figure to PDF and PNG in PLOT_DIR. 
+    PLOT_DIR and TAG are used.
 
     If filename has extension '.pdf', only a PDF will be saved. Otherwise
     save both PDF and PNG.
-    """
+    
+    Args:
+        filename: 
+        fig: 
+        dpi: 
+        isprint: 
+        fromfile: 
+        is_overwrite: 
+        fmt (list of strings): the format of figures. Will overwrite 
+            the global value FMT.
+        kwargs: keywords passed to plt.savefig
 
+    Returns:
+
+    """
+                
     if not SAVING:
         print("SAVING is false. Skiping...")
         return
-    if dpi is None:
-        dpi = 300
-    isprint = isprint and not SUPPRESS_PRINT
+    if SUPPRESS_PRINT > 1:
+        isprint = False
     with_ext = False
     if len(filename) > 4:
         if filename[-4:] in ['.pdf', '.png']:
@@ -319,6 +357,9 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             jsonexist = True
             with open(fn_json, 'r') as ff:
                 data = json.load(ff)
+                
+    # save the figure
+    thefmt = FMT if fmt is None else fmt
     if with_ext:
         f2 = os.path.join(PLOT_DIR, filename)
         if ext == '.png':       # set dpi
@@ -328,8 +369,7 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
         if isprint:
             print(f2, 'saved.')
     else:
-        if FMT == 'png':
-            # os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
+        if thefmt == 'pngpdf':  # save *.png and pdfs/*.pdf
             os.makedirs(os.path.join(PLOT_DIR, 'pdfs'), exist_ok=1)
             f1 = os.path.join(PLOT_DIR, 'pdfs', filename+'.pdf')
             f2 = os.path.join(PLOT_DIR, filename+'.png')
@@ -354,12 +394,19 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             if isprint:
                 print(f1, 'saved.')
                 print(f2, 'saved.')
-        elif FMT == 'pdf':
+        elif thefmt == "png":
+            f2 = os.path.join(PLOT_DIR, filename+'.png')
+            if not OVERWRITE and os.path.exists(f2):
+                return
+            pre.savefig(f2, dpi=dpi, **kwargs)
+            if isprint:
+                print(f2, 'saved.')
+        elif thefmt == 'pdf':  # only PDF
             f2 = os.path.join(PLOT_DIR, filename+'.pdf')
             if not OVERWRITE and os.path.exists(f2):
                 return
-            backup_dir = "history_versions"
             if BACKUP and os.path.exists(f2): # make a backup
+                backup_dir = "history_versions"
                 os.makedirs(os.path.join(PLOT_DIR, backup_dir), exist_ok=1)
                 # read create time from info.json
                 creation = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -371,7 +418,7 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             pre.savefig(f2, **kwargs)
             if isprint:
                 print(f2, 'saved.')
-        elif FMT == 'pdfpng':
+        elif thefmt == 'pdfpng':   # *.pdf and pngs/*.pdf
             os.makedirs(os.path.join(PLOT_DIR, 'pngs'), exist_ok=1)
             f1 = os.path.join(PLOT_DIR, filename+'.pdf')
             if not OVERWRITE and os.path.exists(f1):
@@ -380,6 +427,7 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
             f2 = os.path.join(PLOT_DIR, 'pngs', filename+'.png')
             pre.savefig(f2, dpi=dpi, **kwargs)
             if isprint:
+                print(f2, 'saved.')
                 print(f1, 'saved.')
 
     if not jsonexist:
@@ -396,12 +444,79 @@ def save_pdfpng(filename, fig=None, dpi=None, isprint=1, fromfile=None,
     data[basename] = thisdic
     with open(fn_json, 'w') as ff:
         json.dump(data, ff, indent=2, sort_keys=True)
-    if SUPPRESS_PRINT == 2:
-        print(f2)
     return f2
 
-save = save_pdfpng
-save_plot = save_pdfpng
+
+def save_v2(filename, fig=None, isprint=True, is_overwrite=None,
+            subdir=None, fmt=None, dpi=300, plotdir=None, **kwargs):
+    """
+    Save the current figure (or fig if fig is not None).
+    
+    Args:
+        filename: 
+        fig: 
+        isprint: 
+        is_overwrite: 
+        fmt: 
+        **kwargs: 
+
+    Returns:
+
+    """
+
+    if not SAVING:
+        print("SAVING is false. Skiping...")
+        return
+    the_plot_dir = PLOT_DIR if plotdir is None else plotdir
+    if subdir is not None:
+        the_plot_dir = os.path.join(the_plot_dir, subdir)
+        os.makedirs(the_plot_dir, exist_ok=True)
+    if SUPPRESS_PRINT > 1:
+        isprint = False
+    thefmt = FMT if fmt is None else fmt
+    pre = plt if fig is None else fig
+    if "pdf" in thefmt:
+    # if thefmt == "pdf":     # save only PDF
+        f2 = os.path.join(the_plot_dir, filename+'.pdf')
+        if not OVERWRITE and os.path.exists(f2):
+            print(f"{f2} exists. Skippped.")
+            return
+        pre.savefig(f2, **kwargs)
+        if isprint:
+            print(f2, 'saved.')
+    if "png" in thefmt:
+    # elif thefmt == "png":
+        f2 = os.path.join(the_plot_dir, filename+'.png')
+        if not OVERWRITE and os.path.exists(f2):
+            return
+        pre.savefig(f2, dpi=dpi, **kwargs)
+        if isprint:
+            print(f2, 'saved.')
+    if len(THELOG) > 0:
+        ft = os.path.join(the_plot_dir, filename+'.log')
+        with open(ft, 'w') as fo:
+            fo.write(THELOG)
+    return
+
+# save = save_pdfpng
+# save_plot = save_pdfpng
+save = save_v2
+save_plot = save_v2
+
+
+def log_initialize():
+    global THELOG
+    THELOG = ""
+    return
+
+
+def log(text, isprint=True, end="\n"):
+    global THELOG
+    THELOG += text + end
+    if isprint:
+        print(text)
+    return
+
 
 def text_top(ax, text, loc='top', **kwargs):
     """ write text on the top center of the figure
@@ -413,13 +528,13 @@ def text_top(ax, text, loc='top', **kwargs):
             One of following: top, top_left, top_right
     """
 
-    if loc in ['top', 'top_center', 'top center']:
+    if loc in ['top', 'top_center', 'top center', 'upper center']:
         ax.text(0.5, 0.95, text, va='top', ha='center',
                 transform=ax.transAxes, **kwargs)
-    elif loc in ['top_left', 'top left']:
+    elif loc in ['top_left', 'top left', 'upper left']:
         ax.text(0.05, 0.95, text, va='top', ha='left',
                 transform=ax.transAxes, **kwargs)
-    elif loc in ['top_right', 'top right']:
+    elif loc in ['top_right', 'top right', 'upper right']:
         ax.text(0.95, 0.95, text, va='top', ha='right',
                 transform=ax.transAxes, **kwargs)
     # ax.annotate(text, xy=(x, y), xycoords='data',
@@ -567,24 +682,6 @@ def my_legend(axis = None):
                   horizontalalignment='center',
                   verticalalignment='center')
 
-DASHES = [[], # solid
-          [3,3], # dash
-          [1,1], # dot
-          [1,1,3,1], # dot dash
-          # [9,3], # long dash
-          [6,2], # long dash
-          [3,1,1,1,1,1], # dash dot dot
-          [9,3,3,3], # long short dash
-          [1,1,9,1], # dot long dash
-          [9,3,3,3,3,3], # long short short dash
-          [9,1,1,1,1,1], # long dash dot dot
-          [3,3,3,3,1,3], # dash dash dot
-          [9,3,9,3,1,3], # long dash long dash dot
-          [9,3,9,3,3,3], # long dash long dash dash
-          [9,3,3,3,1,3], # long dash dash dot
-          [9,1,1,1,1,1,1,1], # long dash dot dot dot
-         ]          # Author: Laurens Keek
-
 class ToSave:
     """
     Usage:
@@ -597,13 +694,16 @@ class ToSave:
         s.save()
     """
 
-    def __init__(self, fn, is_always_save=False):
+    def __init__(self, fn, overwrite=False, fmt=None):
         self.fn = fn
-        full_fn = get_full_filename(fn)
-        this_overwrite = OVERWRITE if not is_always_save else True
-        self.plot = not os.path.exists(full_fn)
-        if this_overwrite:
-            self.plot = True
+        self.full_fn = get_full_filename(fn, fmt=fmt)
+        if OVERWRITE:
+            overwrite = True
+        self.plot = overwrite or (not os.path.exists(self.full_fn))
+        if self.plot:
+            print("plotting", self.full_fn)
+        else:
+            print(f"{self.full_fn} exits; skipped.")
 
     def save(self, fn=None, **kwargs):
         if fn is None:
@@ -643,11 +743,13 @@ def changing_color_curve(ax, x, y, xlim, colors, lw='regular'):
     ax.scatter(x_new, y_new, c=colors(values), edgecolor='none', s=lw)
 
 def mylegend(ax=None, loc=0.3, kind='top', align=True, nslope=1,
-             margin_right=0.05, **kwargs):
-    """
+             labels=None, margin_right=0.05, **kwargs):
+    """Plot legends on top of a curve
+
     Args:
         loc (float or tuple): location (x axis) of the labels. If tuple,
             ranging from loc[0] to loc[1].
+        labels (list of strings): Set the labels. if None (default), use line labels.
 
     """
     if isinstance(loc, float):
@@ -657,12 +759,13 @@ def mylegend(ax=None, loc=0.3, kind='top', align=True, nslope=1,
         x_start = loc[0]
         x_end = loc[1]
     if kind == 'top':
-        trans = ax.get_yaxis_transform()
         lines = ax.lines
         #if pos is None:
             #pos = 1 - 0.618
         poss = [x_start + i / (len(lines) - 1) * (x_end - x_start) for i in range(len(lines))]
-        for pos, line in zip(poss, lines):
+        for idx, pos in enumerate(poss):
+        # for pos, line in zip(poss, lines):
+            line = lines[idx]
             xy = line.get_xydata()
             xdata = xy[:, 0]
             ydata = xy[:, 1]
@@ -695,7 +798,12 @@ def mylegend(ax=None, loc=0.3, kind='top', align=True, nslope=1,
             else:
                 trans_angle = 0
 
-            ax.annotate(line.get_label(), xy=(pos, ypick), xycoords=trans,
+            if labels is not None:
+                label = labels[idx]
+            else:
+                label = line.get_label()
+            trans = ax.get_yaxis_transform()
+            ax.annotate(label, xy=(pos, ypick), xycoords=trans,
                         xytext=(0, 2), textcoords='offset points',
                         va='bottom', ha='center',
                         color=line.get_color(),
@@ -717,11 +825,131 @@ def mylegend(ax=None, loc=0.3, kind='top', align=True, nslope=1,
             ymin, ymax = ax.get_ylim()
             if xy[-1, 1] > ymax or xy[-1, 1] < ymin:
                 continue
+            ax.annotate(
+                line.get_label(),
+                xy=(xy[-1, 0], xy[-1, 1]),
+                xytext=(3, 0), textcoords='offset points',
+                color=line.get_color(), ha='left',)
+            # ax.text(xy[-1, 0], xy[-1, 1], ' ' + line.get_label(), va='center',
+            #         color=line.get_color(),
+            #         **kwargs,)
+        # increase xlim by 10%
+        ax.set_xlim(xmin, xmax + margin_right * (xmax - xmin))
+    elif kind == 'first':
+        lines = ax.lines
+        for line in lines:
+            xy = line.get_xydata()
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            ax.annotate(
+                line.get_label(),
+                xy=(xy[0, 0], xy[0, 1]),
+                xytext=(-3, 0), textcoords='offset points',
+                color=line.get_color(), ha='right',)
+            # ax.text(xy[0, 0], xy[0, 1], ' ' + line.get_label(), va='center', ha='right',
+            #         color=line.get_color(), **kwargs,)
+
+
+def legend_on_curve(ax, locations=None, kind='top', align=True, nslope=2,
+                    labels=None, margin_right=0.1, **kwargs):
+    """Plot legends on top of a curve. Replacement of mylegend()
+
+    Args:
+        loations (list_like): locations (x axis) of the labels.
+        labels (list of strings): Set the labels. if None (default), use line labels.
+
+    """
+    lines = ax.lines
+    N = len(lines)
+    if isinstance(locations, float) or isinstance(locations, int):
+        locations = [locations] * N
+    if kind == 'top':
+        for idx in range(N):
+            pos = locations[idx]
+            line = lines[idx]
+            xy = line.get_xydata()
+            xdata = xy[:, 0]
+            ydata = xy[:, 1]
+            if len(xdata) < 3:
+                continue
+            pick = np.argmax(xdata >= pos)
+            datax = xdata[pick]
+            datay = ydata[pick]
+            # assert datax > -1e10
+            # assert not np.isnan(ypick), f'datax = {datax}, pos={pos}, lim={xmin}, {xmax}, '
+
+            # align text
+            if align:
+                #Compute the slope
+                dx = xdata[pick + nslope//2] - xdata[pick - nslope//2]
+                dy = ydata[pick + nslope//2] - ydata[pick - nslope//2]
+                if dx == 0.0:
+                    ang = 0.0
+                else:
+                    ang = atan(dy/dx) * 180 / pi
+
+                # Transform to screen co-ordinates
+                pt = np.array([datax, datay]).reshape((1,2))
+                trans_angle = ax.transData.transform_angles(
+                    np.array((ang,)), pt)[0]
+            else:
+                trans_angle = 0
+
+            if labels is not None:
+                label = labels[idx]
+            else:
+                label = line.get_label()
+            trans = ax.get_yaxis_transform()
+            ax.annotate(label, xy=(datax, datay), # xycoords=trans,
+                        xytext=(0, 1.5), textcoords='offset points',
+                        va='bottom', ha='center',
+                        color=line.get_color(),
+                        rotation=trans_angle,
+                        rotation_mode="anchor",
+                        **kwargs,
+                        )
+            # ax.text(pos, ypick, line.get_label(),
+            #         transform=trans,
+            #         va='bottom', ha='center',
+            #         color=line.get_color(),
+            #         rotation=trans_angle,
+            #         **kwargs,
+            # )
+    elif kind == 'last':
+        for line in lines:
+            xy = line.get_xydata()
+            xmin, xmax = ax.get_xlim()
+            ymin, ymax = ax.get_ylim()
+            if xy[-1, 1] > ymax or xy[-1, 1] < ymin:
+                continue
             ax.text(xy[-1, 0], xy[-1, 1], ' ' + line.get_label(), va='center',
                     color=line.get_color(),
                     **kwargs,)
         # increase xlim by 10%
         ax.set_xlim(xmin, xmax + margin_right * (xmax - xmin))
+
+
+def annotate_on_curve(ax, x, text, line_idx=0, **kwargs):
+    line = ax.lines[line_idx]
+    xy = line.get_xydata()
+    xdata = xy[:, 0]
+    ydata = xy[:, 1]
+    pick = np.argmax(xdata >= x)
+    y = ydata[pick]
+    gap = 1
+    x1 = xdata[pick+gap]
+    y1 = ydata[pick+gap]
+    rotn = np.degrees(np.arctan2(y1 - y, x1 - x))
+    annotate_kwargs = dict(
+        xytext=(0, 10),  # distance from text to points (x,y)
+        ha="center",     # horizontal alignment can be left, right or center
+    )
+    annotate_kwargs.update(kwargs)
+    ax.annotate(text,  # this is the text
+                (x, y),  # these are the coordinates to position the label
+                textcoords="offset points",  # how to position the text
+                **annotate_kwargs)
+
 
 class CurvedText(matplotlib.text.Text):
     """
@@ -908,7 +1136,7 @@ def horizontal_grids(nrows, ncols):
 
 
 def add_scalebar(ax, length, label, h=0.014, left=0.03, right=None,
-                 color='w', gap=2, **kwargs):
+                 color='w', gap=0.01, **kwargs):
     """ Add a scalebar to a figure
     Author: ChongChong He
 
@@ -957,3 +1185,27 @@ def add_scalebar(ax, length, label, h=0.014, left=0.03, right=None,
         color=color,
         **kwargs,
     )
+
+
+def set_plt_color(ax, color):
+    # ax.spines['bottom'].set_color(color)
+    # ax.spines['top'].set_color(color)
+    for sp in ax.spines:
+        ax.spines[sp].set_color(color)
+    ax.xaxis.label.set_color(color)
+    ax.yaxis.label.set_color(color)
+    ax.tick_params(axis='x', colors=color, which='both')
+    ax.tick_params(axis='y', colors=color, which='both')
+
+
+def get_background_color():
+    return plt.rcParams['axes.facecolor']
+
+def get_black_depending_on_bg():
+    if plt.rcParams['axes.facecolor'] == 'white':
+        return 'k'
+    elif plt.rcParams['axes.facecolor'] == 'black':
+        return 'w'
+    else:
+        return None
+    
