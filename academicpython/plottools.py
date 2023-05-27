@@ -3,7 +3,7 @@
 Tools for plotting with matplotlib. Use along with scienceplot.
 Author: Chong-Chong He
 
-# About OVERWRITE
+### About OVERWRITE
 
 By default, OVERWRITE is on. To turn it off, do
 dt.turnoff_overwrite(). Then, you can use command line arguments to
@@ -29,11 +29,13 @@ import logging
 from scipy.interpolate import interp1d
 
 PLOT_DIR = '.'
+DPI = 300
 THELOG = ""
 SAVING = True
 OVERWRITE = True
 # BACKUP = False
 BACKUP = 1
+SCALE = 1
 FROMFILE = "Unspecified"
 SUPPRESS_PRINT = 1 # 0: print a lot; 1: print filename; 2: print none
 # FMT = 'png'
@@ -87,6 +89,20 @@ def backupone(fi):
     fo = f"{filename}-bk{dt}{file_extension}"
     os.rename(fi, fo)
 
+
+def set_figure_size(size):
+    plt.rcParams["figure.figsize"] = size
+
+
+def set_global_scale(scale):
+    global SCALE
+    SCALE = scale
+
+
+def set_global_dpi(dpi):
+    # plt.rcParams["figure.dpi"] = dpi
+    global DPI 
+    DPI = dpi
 
 
 def set_plotdir(path):
@@ -220,7 +236,7 @@ def scaled_figure(rows=1, columns=1, shrinkx=None, shrinky=None, shrink=None, **
         elif isinstance(shrink, float):
             xs = shrink
             ys = shrink
-    f.set_size_inches(w * columns * xs, h * rows * ys)
+    f.set_size_inches(w * columns * xs * SCALE, h * rows * ys * SCALE)
     return f, ax
 
 def sized_figure(rows=1, columns=1, mergex=True, mergey=True,
@@ -310,7 +326,7 @@ def get_full_filename(filename, fmt=None):
             fn = os.path.join(PLOT_DIR, filename+'.'+thefmt)
     return fn
 
-def save_pdfpng(filename, fig=None, dpi=300, isprint=True, fromfile=None,
+def save_pdfpng(filename, fig=None, dpi=None, isprint=True, fromfile=None,
                 is_overwrite=None, fmt=None, kwargs={}):
     """ Save the current figure to PDF and PNG in PLOT_DIR. 
     PLOT_DIR and TAG are used.
@@ -336,6 +352,8 @@ def save_pdfpng(filename, fig=None, dpi=300, isprint=True, fromfile=None,
     if not SAVING:
         print("SAVING is false. Skiping...")
         return
+    if dpi is None:
+        dpi = DPI
     if SUPPRESS_PRINT > 1:
         isprint = False
     with_ext = False
@@ -448,7 +466,7 @@ def save_pdfpng(filename, fig=None, dpi=300, isprint=True, fromfile=None,
 
 
 def save_v2(filename, fig=None, isprint=True, is_overwrite=None,
-            subdir=None, fmt=None, dpi=300, plotdir=None, **kwargs):
+            subdir=None, fmt=None, dpi=None, plotdir=None, **kwargs):
     """
     Save the current figure (or fig if fig is not None).
     
@@ -463,10 +481,12 @@ def save_v2(filename, fig=None, isprint=True, is_overwrite=None,
     Returns:
 
     """
-
+    
     if not SAVING:
         print("SAVING is false. Skiping...")
         return
+    if dpi is None:
+        dpi = DPI
     the_plot_dir = PLOT_DIR if plotdir is None else plotdir
     if subdir is not None:
         the_plot_dir = os.path.join(the_plot_dir, subdir)
@@ -502,6 +522,97 @@ def save_v2(filename, fig=None, isprint=True, is_overwrite=None,
 # save_plot = save_pdfpng
 save = save_v2
 save_plot = save_v2
+
+
+
+class ToSave:
+    """
+    Usage:
+
+    s = ToSave("filename")
+    if s.plot:
+        f = plt.figure()
+        plt.plot(...)
+        ...
+        s.save()
+    """
+
+    def __init__(self, fn, overwrite=False, fmt=None):
+        self.fn = fn
+        self.full_fn = get_full_filename(fn, fmt=fmt)
+        if OVERWRITE:
+            overwrite = True
+        self.plot = overwrite or (not os.path.exists(self.full_fn))
+        if self.plot:
+            print("plotting", self.full_fn)
+        else:
+            print(f"{self.full_fn} exits; skipped.")
+        
+    def __bool__(self):
+        return self.plot
+
+    def save(self, fn=None, **kwargs):
+        if fn is None:
+            save_pdfpng(self.fn, **kwargs)
+        else:
+            save_pdfpng(fn, **kwargs)
+        return
+
+
+def save_v3(filename, fig=None, subdir=None, fmt=None, dpi=None, plotdir=None, return_fn=False, **kwargs):
+    
+    if not SAVING:
+        print("SAVING is false. Skiping...")
+        return
+    if dpi is None:
+        dpi = DPI
+    the_plot_dir = PLOT_DIR if plotdir is None else plotdir
+    if subdir is not None:
+        the_plot_dir = os.path.join(the_plot_dir, subdir)
+        os.makedirs(the_plot_dir, exist_ok=True)
+    isprint = True
+    if SUPPRESS_PRINT > 1:
+        isprint = False
+    thefmt = FMT if fmt is None else fmt
+    pre = plt if fig is None else fig
+    f2 = os.path.join(the_plot_dir, filename + '.' + thefmt)
+    if return_fn:
+        return f2
+    if not OVERWRITE and os.path.exists(f2):
+        print(f"{f2} exists. Skippped.")
+        return
+    pre.savefig(f2, dpi=dpi, **kwargs)
+    if isprint:
+        print(f2, 'saved.')
+
+        
+class SaveFig:
+    """
+    Usage:
+    
+    s = SaveFig("filename")
+    if s:
+        f = plt.figure()
+        plt.plot(...)
+        ...
+        s.save()
+        s.save(fig=f)
+    """
+    
+    def __init__(self, *args, **kwargs) -> None:
+        self.fn = save_v3(*args, **kwargs, return_fn=True)
+        self.args = args
+        self.kwargs = kwargs
+        self.plot = OVERWRITE or (not os.path.exists(self.fn))
+    
+    def __bool__(self) -> bool:
+        if not self.plot:
+            print(f"{self.fn} exists; skipped.")
+        return self.plot
+
+    def save(self, fig=None):
+        save_v3(*self.args, fig=fig, **self.kwargs)
+        return
 
 
 def log_initialize():
@@ -682,35 +793,6 @@ def my_legend(axis = None):
                   horizontalalignment='center',
                   verticalalignment='center')
 
-class ToSave:
-    """
-    Usage:
-
-    s = ToSave("filename")
-    if s.plot:
-        f = plt.figure()
-        plt.plot(...)
-        ...
-        s.save()
-    """
-
-    def __init__(self, fn, overwrite=False, fmt=None):
-        self.fn = fn
-        self.full_fn = get_full_filename(fn, fmt=fmt)
-        if OVERWRITE:
-            overwrite = True
-        self.plot = overwrite or (not os.path.exists(self.full_fn))
-        if self.plot:
-            print("plotting", self.full_fn)
-        else:
-            print(f"{self.full_fn} exits; skipped.")
-
-    def save(self, fn=None, **kwargs):
-        if fn is None:
-            save_pdfpng(self.fn, **kwargs)
-        else:
-            save_pdfpng(fn, **kwargs)
-        return
 
 def to_latex(f, n=2):
     assert type(n) == int
